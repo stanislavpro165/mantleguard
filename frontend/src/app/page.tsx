@@ -2,18 +2,22 @@
 
 import { useState, useCallback } from "react";
 import Editor from "@monaco-editor/react";
-import AuditReport from "@/components/AuditReport";
-import RiskScore from "@/components/RiskScore";
-import type { AuditResult } from "@/types";
+import Header from "@/components/Header";
+import ReportPanel from "@/components/ReportPanel";
+import EmptyState from "@/components/EmptyState";
+import LoadingState from "@/components/LoadingState";
+import { auditContract, type AuditResult } from "@/lib/api";
 
 const DEFAULT_CODE = `// SPDX-License-Identifier: MIT
 pragma solidity ^0.7.0;
 
 contract HelloMantle {
     string public greeting;
+    address public owner;
 
     constructor() {
         greeting = "Hello, Mantle!";
+        owner = msg.sender;
     }
 
     function setGreeting(string memory _greeting) public {
@@ -22,258 +26,262 @@ contract HelloMantle {
 }
 `;
 
-
-
 export default function Home() {
-  const [code, setCode] = useState("");
+  const [code, setCode] = useState(DEFAULT_CODE);
   const [result, setResult] = useState<AuditResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [activeTab, setActiveTab] = useState<"editor" | "result">("editor");
-
-  const runAudit = useCallback(async () => {
-    const source = code.trim() || DEFAULT_CODE;
+  const handleRunAudit = useCallback(async () => {
+    if (!code?.trim()) return;
     setLoading(true);
     setError("");
+    setResult(null);
 
     try {
-      const res = await fetch("http://localhost:8000/audit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source, contract_name: "" }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || `API error: ${res.status}`);
-      }
-
-      const data = await res.json();
+      const data = await auditContract(code);
       setResult(data);
-      setActiveTab("result");
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to analyze contract");
+      setError(err instanceof Error ? err.message : "Analysis failed");
     } finally {
       setLoading(false);
     }
   }, [code]);
 
-  const loadDemo = useCallback(async () => {
+  const handleLoadDemo = useCallback(async () => {
     try {
       const res = await fetch("/demo.sol");
       const text = await res.text();
       setCode(text);
+      setResult(null);
     } catch {
-      setCode(DEFAULT_CODE);
+      // fallback
     }
   }, []);
 
+  const handleClear = useCallback(() => {
+    setCode(DEFAULT_CODE);
+    setResult(null);
+    setError("");
+  }, []);
+
   return (
-    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
-      {/* Header */}
-      <header style={{
-        padding: "16px 24px",
-        borderBottom: "1px solid var(--border)",
+    <div
+      style={{
+        height: "100vh",
         display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        background: "var(--bg-secondary)",
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <span style={{ fontSize: 24 }}>🛡️</span>
-          <div>
-            <h1 style={{ fontSize: 20, fontWeight: 700, color: "var(--accent)", margin: 0 }}>
-              MantleGuard
-            </h1>
-            <span style={{ fontSize: 11, color: "var(--text-secondary)", letterSpacing: "0.5px" }}>
-              AI SECURITY AGENT
+        flexDirection: "column",
+        background: "var(--color-bg)",
+      }}
+    >
+      <Header />
+
+      {/* Main split view */}
+      <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+        {/* ─── Editor Panel ─── */}
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            borderRight: "1px solid var(--color-border)",
+            minWidth: 0,
+          }}
+        >
+          {/* Toolbar */}
+          <div
+            style={{
+              height: 44,
+              padding: "0 12px",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              borderBottom: "1px solid var(--color-border)",
+              background: "var(--color-bg-elevated)",
+              flexShrink: 0,
+            }}
+          >
+            {/* Run Button */}
+            <button
+              onClick={handleRunAudit}
+              disabled={loading}
+              style={{
+                padding: "6px 16px",
+                borderRadius: "var(--radius-md)",
+                background: loading
+                  ? "var(--color-mantle-dim)"
+                  : "var(--color-mantle)",
+                color: "#000",
+                border: "none",
+                fontWeight: 700,
+                fontSize: 12,
+                cursor: loading ? "not-allowed" : "pointer",
+                opacity: loading ? 0.6 : 1,
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                transition: "opacity 0.2s",
+              }}
+            >
+              {loading ? (
+                <>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ animation: "spin 1s linear infinite" }}>
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4 31.4" strokeLinecap="round"/>
+                  </svg>
+                  Scanning
+                </>
+              ) : (
+                <>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                    <path d="M5 3l14 9-14 9V3z" fill="currentColor"/>
+                  </svg>
+                  Run Audit
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={handleLoadDemo}
+              style={{
+                padding: "6px 12px",
+                borderRadius: "var(--radius-md)",
+                background: "transparent",
+                color: "var(--color-text-secondary)",
+                border: "1px solid var(--color-border)",
+                fontWeight: 500,
+                fontSize: 12,
+                cursor: "pointer",
+                transition: "border-color 0.2s, color 0.2s",
+              }}
+            >
+              Demo
+            </button>
+            <button
+              onClick={handleClear}
+              style={{
+                padding: "6px 12px",
+                borderRadius: "var(--radius-md)",
+                background: "transparent",
+                color: "var(--color-text-secondary)",
+                border: "1px solid var(--color-border)",
+                fontWeight: 500,
+                fontSize: 12,
+                cursor: "pointer",
+              }}
+            >
+              Reset
+            </button>
+
+            {/* File info */}
+            <div style={{ flex: 1 }} />
+            <span
+              style={{
+                fontSize: 10,
+                color: "var(--color-text-muted)",
+                fontFamily: "var(--font-mono)",
+              }}
+            >
+              {code ? `${(code.length / 1024).toFixed(1)}kb` : ""}
+              {result ? ` · ${result.contract_name}` : ""}
             </span>
           </div>
-        </div>
 
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <span style={{
-            fontSize: 11, padding: "3px 8px",
-            background: "rgba(0, 212, 170, 0.1)", color: "var(--accent)",
-            borderRadius: 4, border: "1px solid rgba(0, 212, 170, 0.3)",
-            letterSpacing: "0.3px"
-          }}>
-            MANTLE NETWORK
-          </span>
-        </div>
-      </header>
-
-      {/* Main content */}
-      <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-        {/* Tab bar for mobile */}
-        <div style={{
-          display: "none",
-          padding: "8px 16px", gap: 8,
-          borderBottom: "1px solid var(--border)",
-        }} className="tab-bar">
-          <button onClick={() => setActiveTab("editor")}
-            style={{
-              padding: "8px 16px", borderRadius: 6,
-              background: activeTab === "editor" ? "var(--accent)" : "transparent",
-              color: activeTab === "editor" ? "#000" : "var(--text-secondary)",
-              border: "1px solid var(--border)",
-              fontWeight: 600, fontSize: 13, cursor: "pointer",
-            }}>
-            Editor
-          </button>
-          <button onClick={() => setActiveTab("result")}
-            disabled={!result}
-            style={{
-              padding: "8px 16px", borderRadius: 6,
-              background: activeTab === "result" ? "var(--accent)" : "transparent",
-              color: activeTab === "result" ? "#000" : "var(--text-secondary)",
-              border: "1px solid var(--border)",
-              fontWeight: 600, fontSize: 13, cursor: "pointer",
-              opacity: result ? 1 : 0.5,
-            }}>
-            Report
-          </button>
-        </div>
-
-        {/* Editor Panel */}
-        <div style={{
-          flex: 1,
-          display: "flex",
-          flexDirection: "column",
-          borderRight: "1px solid var(--border)",
-        }}>
-          {/* Toolbar */}
-          <div style={{
-            padding: "8px 16px",
-            display: "flex", gap: 8, alignItems: "center",
-            borderBottom: "1px solid var(--border)",
-            background: "var(--bg-secondary)",
-          }}>
-            <button onClick={runAudit} disabled={loading}
-              style={{
-                padding: "8px 20px", borderRadius: 6,
-                background: loading ? "var(--accent-dim)" : "var(--accent)",
-                color: "#000", border: "none",
-                fontWeight: 700, fontSize: 13, cursor: loading ? "not-allowed" : "pointer",
-                opacity: loading ? 0.7 : 1,
-              }}>
-              {loading ? "⟳ Analyzing..." : "▶ Run Audit"}
-            </button>
-            <button onClick={loadDemo}
-              style={{
-                padding: "8px 16px", borderRadius: 6,
-                background: "transparent", color: "var(--text-secondary)",
-                border: "1px solid var(--border)",
-                fontWeight: 500, fontSize: 12, cursor: "pointer",
-              }}>
-              Load Demo
-            </button>
-            <button onClick={() => setCode("")}
-              style={{
-                padding: "8px 16px", borderRadius: 6,
-                background: "transparent", color: "var(--text-secondary)",
-                border: "1px solid var(--border)",
-                fontWeight: 500, fontSize: 12, cursor: "pointer",
-              }}>
-              Clear
-            </button>
-
-            {result && (
-              <span style={{
-                marginLeft: "auto", fontSize: 11,
-                color: "var(--text-secondary)",
-              }}>
-                {result.detectors_run} detectors · {result.total_issues} issues
-              </span>
-            )}
-          </div>
-
-          {/* Monaco Editor */}
+          {/* Editor */}
           <div style={{ flex: 1, minHeight: 0 }}>
             <Editor
               height="100%"
               defaultLanguage="sol"
               language="sol"
               theme="vs-dark"
-              value={code || DEFAULT_CODE}
-              onChange={(v) => setCode(v || "")}
+              value={code}
+              onChange={(v) => {
+                setCode(v || "");
+                setResult(null);
+              }}
               options={{
                 minimap: { enabled: false },
-                fontSize: 14,
-                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 13,
+                fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
                 lineNumbers: "on",
+                lineNumbersMinChars: 3,
                 scrollBeyondLastLine: false,
-                padding: { top: 16 },
+                padding: { top: 12 },
                 automaticLayout: true,
                 bracketPairColorization: { enabled: true },
+                renderLineHighlight: "all",
+                cursorBlinking: "smooth",
+                smoothScrolling: true,
+                folding: true,
+                foldingHighlight: true,
+                guides: { indentation: true, bracketPairs: true },
               }}
             />
           </div>
         </div>
 
-        {/* Report Panel */}
-        <div style={{
-          width: "45%", minWidth: 400, overflow: "auto",
-          display: "flex", flexDirection: "column",
-        }}>
-          {error && (
-            <div style={{
-              padding: 16, margin: 16,
-              background: "rgba(255, 71, 87, 0.1)",
-              border: "1px solid var(--danger)",
-              borderRadius: 8, color: "var(--danger)", fontSize: 13,
-            }}>
-              ❌ {error}
-            </div>
-          )}
+        {/* ─── Report Panel ─── */}
+        <div
+          style={{
+            width: "42%",
+            minWidth: 380,
+            display: "flex",
+            flexDirection: "column",
+            background: "var(--color-bg-deep)",
+            position: "relative",
+          }}
+        >
+          {/* Background grid */}
+          <div
+            className="bg-grid"
+            style={{
+              position: "absolute",
+              inset: 0,
+              opacity: 0.5,
+              pointerEvents: "none",
+            }}
+          />
 
-          {loading && (
-            <div style={{
-              flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
-              flexDirection: "column", gap: 16, color: "var(--text-secondary)",
-            }}>
-              <div style={{ fontSize: 48, animation: "none" }}>🔍</div>
-              <div style={{ fontSize: 14, fontWeight: 500 }}>Analyzing contract...</div>
-              <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
-                Running {11} security detectors
-              </div>
-            </div>
-          )}
-
-          {!loading && !error && !result && (
-            <div style={{
-              flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
-              flexDirection: "column", gap: 16, color: "var(--text-secondary)", padding: 32,
-              textAlign: "center",
-            }}>
-              <div style={{ fontSize: 48, opacity: 0.4 }}>🛡️</div>
-              <div style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)" }}>
-                Paste a Solidity contract
-              </div>
-              <div style={{ fontSize: 13, maxWidth: 320, lineHeight: 1.6 }}>
-                Drop your .sol file or paste code in the editor, then click{" "}
-                <span style={{ color: "var(--accent)", fontWeight: 600 }}>Run Audit</span>
-              </div>
-              <button onClick={loadDemo}
+          <div style={{ position: "relative", flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            {/* Error Banner */}
+            {error && (
+              <div
                 style={{
-                  marginTop: 8, padding: "8px 20px", borderRadius: 6,
-                  background: "transparent", color: "var(--accent)",
-                  border: "1px solid var(--accent)",
-                  fontWeight: 600, fontSize: 13, cursor: "pointer",
-                }}>
-                Try Demo Contract
-              </button>
-            </div>
-          )}
+                  margin: "12px 16px 0",
+                  padding: "10px 14px",
+                  borderRadius: "var(--radius-md)",
+                  background: "var(--color-danger-bg)",
+                  border: "1px solid rgba(255,71,87,0.2)",
+                  color: "var(--color-danger)",
+                  fontSize: 12,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  flexShrink: 0,
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.5"/>
+                  <path d="M12 8v4M12 16h0" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+                {error}
+              </div>
+            )}
 
-          {!loading && result && (
-            <>
-              <RiskScore result={result} />
-              <AuditReport result={result} />
-            </>
-          )}
+            {/* Content */}
+            {loading ? (
+              <LoadingState />
+            ) : result ? (
+              <ReportPanel result={result} />
+            ) : (
+              <EmptyState onLoadDemo={handleLoadDemo} />
+            )}
+          </div>
         </div>
       </div>
+
+      {/* Global keyframe for spinner */}
+      <style dangerouslySetInnerHTML={{
+        __html: `@keyframes spin { to { transform: rotate(360deg); } }`
+      }} />
     </div>
   );
 }
