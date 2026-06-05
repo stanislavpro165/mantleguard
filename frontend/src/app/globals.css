@@ -1,0 +1,34 @@
+@import "tailwindcss";
+
+:root {
+  --bg-primary: #0a0a0f;
+  --bg-secondary: #13131a;
+  --bg-card: #1a1a2e;
+  --accent: #00d4aa;
+  --accent-dim: #00b894;
+  --danger: #ff4757;
+  --warning: #ffa502;
+  --info: #2ed573;
+  --text-primary: #e8e8f0;
+  --text-secondary: #8e8ea0;
+  --border: #2a2a3e;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  min-height: 100vh;
+}
+
+/* Monaco editor overrides */
+.monaco-editor {
+  border-radius: 8px;
+  overflow: hidden;
+}
