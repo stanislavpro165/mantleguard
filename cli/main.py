@@ -196,7 +196,7 @@ Examples:
 
 def _cmd_init():
     """Создать демо-контракт с уязвимостями."""
-    src = Path(__file__).parent.parent / "contracts" / "VulnerableWallet.sol"
+    src = Path(__file__).parent.parent / "contracts" / "contracts" / "VulnerableWallet.sol"
     if src.exists():
         content = src.read_text(encoding="utf-8")
         output = "VulnerableWallet.sol"
