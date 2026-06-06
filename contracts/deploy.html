@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>MantleGuard — Deploy</title>
+    <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background: #0a0a12; color: #e8e8f0; font-family: Inter, system-ui, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .card { background: #14142a; border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; padding: 32px; max-width: 520px; width: 92%; }
+        h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+        .sub { color: #8888aa; font-size: 13px; margin-bottom: 20px; }
+        .info-box { background: rgba(0,212,170,0.06); border: 1px solid rgba(0,212,170,0.1); border-radius: 8px; padding: 12px; font-size: 12px; color: #aaa; margin-bottom: 16px; }
+        .info-box a { color: #00d4aa; }
+        .addr { font-size: 12px; color: #8888aa; word-break: break-all; font-family: monospace; margin: 8px 0; }
+        .row { display: flex; gap: 8px; margin: 12px 0; }
+        button { padding: 12px 24px; border-radius: 8px; border: none; font-weight: 700; font-size: 14px; cursor: pointer; transition: all 0.2s; }
+        .btn-primary { background: #00d4aa; color: #000; flex: 1; }
+        .btn-primary:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
+        .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+        .btn-secondary { background: transparent; color: #8888aa; border: 1px solid rgba(255,255,255,0.08); }
+        .status { margin-top: 12px; padding: 10px; border-radius: 8px; font-size: 13px; }
+        .status.ready { background: rgba(0,212,170,0.06); color: #8888aa; }
+        .status.success { background: rgba(46,213,115,0.1); color: #2ed573; }
+        .status.error { background: rgba(255,71,87,0.1); color: #ff4757; }
+        .status.pending { background: rgba(255,165,2,0.1); color: #ffa502; }
+        .result { margin-top: 16px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 16px; font-size: 12px; display: none; }
+        .result.show { display: block; }
+        .result a { color: #00d4aa; word-break: break-all; }
+        .hidden { display: none; }
+        pre { background: #000; padding: 8px; border-radius: 6px; font-size: 11px; overflow: auto; margin-top: 8px; }
+    </style>
+</head>
+<body>
+<div class="card">
+    <h1>🚀 MantleGuard Deploy</h1>
+    <p class="sub">Деплой контрактов на Mantle Sepolia</p>
+
+    <!-- Not connected -->
+    <div id="noWallet" class="info-box">
+        Подключи MetaMask и выбери сеть <b>Mantle Sepolia</b> (Chain ID 5003)
+    </div>
+
+    <!-- Connected -->
+    <div id="connected" class="hidden">
+        <div class="addr" id="displayAddr">—</div>
+        <div style="font-size:11px; color:#666; font-family:monospace;" id="displayBalance">Balance: —</div>
+
+        <div class="row">
+            <button id="deployBtn" class="btn-primary" onclick="doDeploy()">
+                🔥 Deploy Both Contracts
+            </button>
+            <button onclick="refresh()" class="btn-secondary">↻</button>
+        </div>
+        <div id="status" class="status ready">Connect wallet and click deploy</div>
+    </div>
+
+    <!-- Result -->
+    <div id="result" class="result">
+        <div style="color:#2ed573; font-weight:700; margin-bottom:8px;">✅ Deployed successfully!</div>
+        <div id="resultAddresses"></div>
+    </div>
+</div>
+
+<script>
+    const ETHERSCAN = 'https://explorer.sepolia.mantle.xyz';
+
+    // Эти будут заменены через Python скрипт
+    const VULN_BYTECODE = "0x608060405234801561001057600080fd5b50600080546001600160a01b031916331790556105c5806100326000396000f3fe6080604052600436106100ab5760003560e01c806341c0e1b51161006457806341c0e1b51461023c5780634da2317f146102515780636bbec570146102665780638da5cb5b146102995780639231cf74146102ae578063c00007b0146102c3576100ff565b806313af40351461010457806321e5383a1461013957806327e235e3146101725780632e1a7d4d146101b7578063365b98b2146101e15780633d7b369a14610227576100ff565b366100ff5733600081815260016020908152604091829020805434908101909155825190815291517fe1fffcc4923d04b559f4d29a8bfc6cda04eb5b0d3c460751c2402c5c5cc9109c9281900390910190a2005b600080fd5b34801561011057600080fd5b506101376004803603602081101561012757600080fd5b50356001600160a01b03166102f6565b005b34801561014557600080fd5b506101376004803603604081101561015c57600080fd5b506001600160a01b038135169060200135610318565b34801561017e57600080fd5b506101a56004803603602081101561019557600080fd5b50356001600160a01b031661033a565b60408051918252519081900360200190f35b3480156101c357600080fd5b50610137600480360360208110156101da57600080fd5b503561034c565b3480156101ed57600080fd5b5061020b6004803603602081101561020457600080fd5b5035610454565b604080516001600160a01b039092168252519081900360200190f35b34801561023357600080fd5b5061013761047e565b34801561024857600080fd5b50610137610497565b34801561025d57600080fd5b506101376104a5565b34801561027257600080fd5b506101376004803603602081101561028957600080fd5b50356001600160a01b031661050e565b3480156102a557600080fd5b5061020b610565565b3480156102ba57600080fd5b506101a5610574565b3480156102cf57600080fd5b50610137600480360360208110156102e657600080fd5b50356001600160a01b031661057a565b600080546001600160a01b0319166001600160a01b0392909216919091179055565b6001600160a01b03909116600090815260016020526040902080549091019055565b60016020526000908152604090205481565b336000908152600160205260409020548111156103a7576040805162461bcd60e51b8152602060048201526014602482015273696e73756666696369656e742062616c616e636560601b604482015290519081900360640190fd5b604051600090339083908381818185875af1925050503d80600081146103e9576040519150601f19603f3d011682016040523d82523d6000602084013e6103ee565b606091505b505090508061043a576040805162461bcd60e51b8152602060048201526013602482015272115512081d1c985b9cd9995c8819985a5b1959606a1b604482015290519081900360640190fd5b503360009081526001602052604090208054919091039055565b6003818154811061046457600080fd5b6000918252602090912001546001600160a01b0316905081565b6000546001600160a01b0316321461049557600080fd5b565b6000546001600160a01b0316ff5b60005b60035481101561050b57600381815481106104bf57fe5b60009182526020822001546040516001600160a01b039091169190670de0b6b3a76400009082818181858883f19350505050158015610502573d6000803e3d6000fd5b506001016104a8565b50565b6040516000906001600160a01b0383169047908381818185875af1925050503d8060008114610559576040519150601f19603f3d011682016040523d82523d6000602084013e61055e565b606091505b5050505050565b6000546001600160a01b031681565b60025481565b60025462093a8001421061050b57426002555056fea26469706673582212203e2ed18117fd62561f5e5854d7bec8d8427e9e50efd6712e0d6f0724a051822064736f6c63430007060033";
+    const FIXED_BYTECODE = "0x608060405234801561001057600080fd5b50600080546001600160a01b031916331790556105e2806100326000396000f3fe60806040526004361061007f5760003560e01c80636bbec5701161004e5780636bbec570146101915780638da5cb5b146101c45780639231cf74146101f5578063b88a802f1461020a576100d3565b806313af4035146100d857806327e235e31461010d5780632e1a7d4d1461015257806341c0e1b51461017c576100d3565b366100d35733600081815260016020908152604091829020805434908101909155825190815291517fe1fffcc4923d04b559f4d29a8bfc6cda04eb5b0d3c460751c2402c5c5cc9109c9281900390910190a2005b600080fd5b3480156100e457600080fd5b5061010b600480360360208110156100fb57600080fd5b50356001600160a01b031661021f565b005b34801561011957600080fd5b506101406004803603602081101561013057600080fd5b50356001600160a01b03166102d6565b60408051918252519081900360200190f35b34801561015e57600080fd5b5061010b6004803603602081101561017557600080fd5b50356102e8565b34801561018857600080fd5b5061010b610451565b34801561019d57600080fd5b5061010b600480360360208110156101b457600080fd5b50356001600160a01b03166104aa565b3480156101d057600080fd5b506101d9610591565b604080516001600160a01b039092168252519081900360200190f35b34801561020157600080fd5b506101406105a0565b34801561021657600080fd5b5061010b6105a6565b6000546001600160a01b0316331461026a576040805162461bcd60e51b81526020600482015260096024820152683737ba1037bbb732b960b91b604482015290519081900360640190fd5b6001600160a01b0381166102b4576040805162461bcd60e51b815260206004820152600c60248201526b7a65726f206164647265737360a01b604482015290519081900360640190fd5b600080546001600160a01b0319166001600160a01b0392909216919091179055565b60016020526000908152604090205481565b60025460ff1615610331576040805162461bcd60e51b815260206004820152600e60248201526d1c99595b9d1c985b9d0818d85b1b60921b604482015290519081900360640190fd5b6002805460ff19166001908117909155336000908152602091909152604090205481111561039d576040805162461bcd60e51b8152602060048201526014602482015273696e73756666696369656e742062616c616e636560601b604482015290519081900360640190fd5b33600081815260016020526040808220805485900390555190919083908381818185875af1925050503d80600081146103f2576040519150601f19603f3d011682016040523d82523d6000602084013e6103f7565b606091505b5050905080610443576040805162461bcd60e51b8152602060048201526013602482015272115512081d1c985b9cd9995c8819985a5b1959606a1b604482015290519081900360640190fd5b50506002805460ff19169055565b6000546001600160a01b0316331461049c576040805162461bcd60e51b81526020600482015260096024820152683737ba1037bbb732b960b91b604482015290519081900360640190fd5b6000546001600160a01b0316ff5b6000546001600160a01b031633146104f5576040805162461bcd60e51b81526020600482015260096024820152683737ba1037bbb732b960b91b604482015290519081900360640190fd5b6040516000906001600160a01b0383169047908381818185875af1925050503d8060008114610540576040519150601f19603f3d011682016040523d82523d6000602084013e610545565b606091505b505090508061058d576040805162461bcd60e51b815260206004820152600f60248201526e1d1c985b9cd9995c8819985a5b1959608a1b604482015290519081900360640190fd5b5050565b6000546001600160a01b031681565b60035481565b4260035556fea2646970667358221220d33fc69621936da0ae227d22706f3641423e11838ef2747f2ec481ceb28424f264736f6c63430007060033";
+    
+    let provider, signer, address;
+    
+    async function init() {
+        if (!window.ethereum) return;
+        
+        provider = new ethers.providers.Web3Provider(window.ethereum);
+        const accounts = await provider.listAccounts();
+        
+        if (accounts.length > 0) {
+            signer = provider.getSigner();
+            address = accounts[0];
+            document.getElementById('noWallet').classList.add('hidden');
+            document.getElementById('connected').classList.remove('hidden');
+            await refresh();
+        }
+    }
+    
+    async function refresh() {
+        if (!signer) return;
+        address = await signer.getAddress();
+        document.getElementById('displayAddr').textContent = address;
+        const bal = await provider.getBalance(address);
+        document.getElementById('displayBalance').textContent = `Balance: ${ethers.utils.formatEther(bal)} MNT`;
+    }
+    
+    async function doDeploy() {
+        const btn = document.getElementById('deployBtn');
+        const status = document.getElementById('status');
+        const resultDiv = document.getElementById('result');
+        
+        btn.disabled = true;
+        status.className = 'status pending';
+        status.textContent = '⏳ Requesting wallet connection...';
+        
+        try {
+            // Подключаем MetaMask
+            await window.ethereum.request({ method: 'eth_requestAccounts' });
+            
+            // Проверяем сеть
+            const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+            if (chainId !== '0x138b') {
+                status.className = 'status error';
+                status.textContent = '❌ Переключись на Mantle Sepolia (Chain ID 5003) в MetaMask!';
+                btn.disabled = false;
+                return;
+            }
+            
+            // ---- Deploy VulnerableWallet ----
+            status.textContent = '⏳ Deploying VulnerableWallet (1/2)...';
+            const tx1 = await signer.sendTransaction({
+                data: VULN_BYTECODE,
+                gasLimit: 500000
+            });
+            status.textContent = '⏳ Waiting for tx 1/2... ' + tx1.hash.slice(0, 18) + '...';
+            const receipt1 = await tx1.wait();
+            const vulnAddr = receipt1.contractAddress;
+            
+            // ---- Deploy FixedWallet ----
+            status.textContent = '⏳ Deploying FixedWallet (2/2)...';
+            const tx2 = await signer.sendTransaction({
+                data: FIXED_BYTECODE,
+                gasLimit: 500000
+            });
+            status.textContent = '⏳ Waiting for tx 2/2... ' + tx2.hash.slice(0, 18) + '...';
+            const receipt2 = await tx2.wait();
+            const fixedAddr = receipt2.contractAddress;
+            
+            // ---- Success ----
+            status.className = 'status success';
+            status.textContent = '✅ Both contracts deployed!';
+            btn.textContent = '✅ Done';
+            
+            resultDiv.classList.add('show');
+            document.getElementById('resultAddresses').innerHTML = `
+                <div style="margin-bottom: 8px;"><b>VulnerableWallet</b></div>
+                <a href="${ETHERSCAN}/address/${vulnAddr}" target="_blank">${vulnAddr}</a>
+                <div style="margin: 12px 0 8px;"><b>FixedWallet</b></div>
+                <a href="${ETHERSCAN}/address/${fixedAddr}" target="_blank">${fixedAddr}</a>
+                <pre>Add these to your MantleGuard demo!</pre>
+            `;
+            
+        } catch (e) {
+            status.className = 'status error';
+            status.textContent = '❌ ' + (e.message || 'Deployment failed');
+            btn.disabled = false;
+            console.error(e);
+        }
+    }
+    
+    init();
+</script>
+</body>
+</html>

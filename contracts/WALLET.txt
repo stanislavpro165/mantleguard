@@ -1,0 +1,11 @@
+=== MantleGuard Hackathon Wallet ===
+Сеть: Mantle Sepolia
+Address: 0x3F1A797437176aa1EfC92ea5865c86149A8f9Dac
+Explorer: https://explorer.sepolia.mantle.xyz/address/0x3F1A797437176aa1EfC92ea5865c86149A8f9Dac
+
+Как получить тестовый MNT:
+1. Перейди на https://faucet.sepolia.mantle.xyz
+2. Вставь адрес: 0x3F1A797437176aa1EfC92ea5865c86149A8f9Dac
+3. Нажми "Request funds"
+4. Подожди ~30 секунд
+5. Вернись — я проверю баланс и задеплою контракты
